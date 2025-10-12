@@ -1,0 +1,193 @@
+name: Terraform CI/CD
+
+on:
+  pull_request:
+    branches:
+      - master
+  push:
+    branches:
+      - master
+  workflow_dispatch:
+
+env:
+  TERRAFORM_VERSION: 1.12.2
+  AWS_REGION: us-east-1
+  AWS_ROLE_ARN: arn:aws:iam::851751563696:role/ci-gha-terraform
+
+jobs:
+  set-common-constants:
+    runs-on: ubuntu-latest
+    outputs:
+      projects: '[
+        "independent/ap-northeast-1",
+        "independent/ap-southeast-1",
+        "development",
+        "production"
+        ]'
+    steps:
+      - run: echo 'Setting common constants'
+  check-for-changes:
+    needs: set-common-constants
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        directories: ${{ fromJson(needs.set-common-constants.outputs.projects) }}
+    outputs:
+      exclude-independent-ap-northeast-1: ${{ steps.exclude-dirs.outputs.exclude-independent-ap-northeast-1 }}
+      exclude-independent-ap-southeast-1: ${{ steps.exclude-dirs.outputs.exclude-independent-ap-southeast-1 }}
+      exclude-development: ${{ steps.exclude-dirs.outputs.exclude-development }}
+      exclude-production: ${{ steps.exclude-dirs.outputs.exclude-production }}
+    steps:
+      - name: Check for changes
+        id: check-for-changes
+        uses: trieutrinh/common-gha/.github/actions/check-for-changes@stable
+        with:
+          ref: ${{ github.head_ref }}
+          repository: ${{ github.repository }}
+          target: ${{ matrix.directories }}
+      - name: Create exclude-dirs output
+        id: exclude-dirs
+        run: |
+          case ${{ github.event_name }} in
+            workflow_dispatch | schedule)
+              :
+              ;;
+            *)
+              if [ "${{ steps.check-for-changes.outputs.skip }}" == "true" ]; then
+                echo "exclude-$(echo "${{ matrix.directories }}" | tr '/' '-')=${{ matrix.directories }}" >> $GITHUB_OUTPUT
+              fi
+              ;;
+          esac
+  terraform-plan:
+    if: >-
+      ${{
+        !needs.check-for-changes.outputs.exclude-independent-ap-northeast-1 ||
+        !needs.check-for-changes.outputs.exclude-independent-ap-southeast-1 ||
+        !needs.check-for-changes.outputs.exclude-development ||
+        !needs.check-for-changes.outputs.exclude-production
+      }}
+    needs:
+      - set-common-constants
+      - check-for-changes
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: write
+    strategy:
+      fail-fast: false
+      matrix:
+        directory: ${{ fromJson(needs.set-common-constants.outputs.projects) }}
+        exclude:
+          - directory: ${{ needs.check-for-changes.outputs.exclude-independent-ap-northeast-1 }}
+          - directory: ${{ needs.check-for-changes.outputs.exclude-independent-ap-southeast-1 }}
+          - directory: ${{ needs.check-for-changes.outputs.exclude-development }}
+          - directory: ${{ needs.check-for-changes.outputs.exclude-production }}
+    steps:
+      - name: Checkout the repository
+        uses: trieutrinh/common-gha/.github/actions/checkout@stable
+        with:
+          ref: ${{ github.head_ref }}
+          repository: ${{ github.repository }}
+      - name: Generate ci role_arn and repository name
+        run: |
+          # echo ROLE_TO_ASSUME="${AWS_ROLE_ARN}${{ github.ref != 'refs/heads/master' && '-ro' || '' }}" >> "$GITHUB_ENV"
+          echo ROLE_TO_ASSUME="${AWS_ROLE_ARN}" >> "$GITHUB_ENV"
+          echo REPO_NAME="${GITHUB_REPOSITORY##*/}" >> "$GITHUB_ENV"
+          echo DIRECTORY="${{ matrix.directory }}" >> "$GITHUB_ENV"
+      - name: Setup terraform
+        uses: trieutrinh/common-gha/.github/actions/setup-terraform-aws@stable
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ env.ROLE_TO_ASSUME }}
+          terraform-version: ${{ env.TERRAFORM_VERSION }}
+          working-directory: ${{ env.DIRECTORY }}
+      - name: Terraform plan
+        uses: trieutrinh/common-gha/.github/actions/terraform-plan@stable
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          github-head-ref: ${{ github.head_ref }}
+          working-directory: ${{ env.DIRECTORY }}
+  terraform-plan-results:
+    if: ${{ always() }}
+    needs: terraform-plan
+    runs-on: ubuntu-latest
+    steps:
+      - run: exit 1
+        if: >-
+          ${{
+              contains(needs.*.result, 'failure') || 
+              contains(needs.*.result, 'cancelled')
+          }}
+  terraform-apply:
+    if: ${{ github.event_name != 'schedule' && github.ref == 'refs/heads/master' }}
+    needs: 
+      - set-common-constants
+      - check-for-changes
+      - terraform-plan-results
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      id-token: write
+      pull-requests: write
+    strategy:
+      fail-fast: false
+      matrix:
+        directory: ${{ fromJson(needs.set-common-constants.outputs.projects) }}
+        exclude:
+          - directory: ${{ needs.check-for-changes.outputs.exclude-independent-ap-northeast-1 }}
+          - directory: ${{ needs.check-for-changes.outputs.exclude-independent-ap-southeast-1 }}
+          - directory: ${{ needs.check-for-changes.outputs.exclude-development }}
+          - directory: ${{ needs.check-for-changes.outputs.exclude-production }}
+    environment: ${{ matrix.directory }}
+    steps:
+      - name: Checkout the repository
+        uses: trieutrinh/common-gha/.github/actions/checkout@stable
+        with:
+          ref: ${{ github.head_ref }}
+          repository: ${{ github.repository }}
+      - name: Generate ci role_arn and repository name
+        run: |
+          # echo ROLE_TO_ASSUME="${AWS_ROLE_ARN}" >> "$GITHUB_ENV"
+          echo ROLE_TO_ASSUME="${AWS_ROLE_ARN}" >> "$GITHUB_ENV"
+          echo REPO_NAME="${GITHUB_REPOSITORY##*/}" >> "$GITHUB_ENV"
+          echo DIRECTORY="${{ matrix.directory }}" >> "$GITHUB_ENV"
+      - name: Setup terraform
+        uses: trieutrinh/common-gha/.github/actions/setup-terraform-aws@stable
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ env.ROLE_TO_ASSUME }}
+          terraform-version: ${{ env.TERRAFORM_VERSION }}
+          working-directory: ${{ env.DIRECTORY }}
+      - name: Terraform apply
+        run: |
+          echo "Running terraform apply in directory: ${{ env.DIRECTORY }}"
+      - name: Terraform apply
+        uses: trieutrinh/common-gha/.github/actions/terraform-apply@stable
+        with:
+          github-token: ${{ secrets.GITHUB_TOKEN }}
+          working-directory: ${{ env.DIRECTORY }}
+  save-cache:
+    if: ${{ github.event_name != 'schedule' && github.ref == 'refs/heads/master' }}
+    needs:
+      - set-common-constants
+      - check-for-changes
+      - terraform-apply
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        directory: ${{ fromJson(needs.set-common-constants.outputs.projects) }}
+        exclude:
+          - directory: ${{ needs.check-for-changes.outputs.exclude-independent-ap-northeast-1 }}
+          - directory: ${{ needs.check-for-changes.outputs.exclude-independent-ap-southeast-1 }}
+          - directory: ${{ needs.check-for-changes.outputs.exclude-development }}
+          - directory: ${{ needs.check-for-changes.outputs.exclude-production }}
+    steps:
+      - name: Save cache ${{ matrix.directory }}
+        uses: trieutrinh/common-gha/.github/actions/save-cache-terraform-files@stable
+        with:
+          ref: ${{ github.head_ref }}
+          repository: ${{ github.repository }}
+          target: '${{ matrix.directory }}'
