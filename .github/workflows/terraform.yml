@@ -117,7 +117,8 @@ jobs:
             echo "${{ matrix.directory }}" >> /tmp/tf-plan-changed/changed.txt
           else
             echo "No change" >> /tmp/tf-plan-changed/no-changed.txt
-        working-directory: ${{ matrix.directory }}
+          fi
+        # working-directory: ${{ matrix.directory }}
       - name: Upload file to artifact
         if: ${{ !startsWith(github.head_ref, '^dependabot/') }}
         uses: actions/upload-artifact@v4.6.2
