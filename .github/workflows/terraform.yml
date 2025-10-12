@@ -114,7 +114,7 @@ jobs:
         run: |
           mkdir -p /tmp/tf-plan-changed
           echo "Terraform plan on ${{ matrix.directory }} has changes"
-          if ${{ steps.plan.outputs.exitcode == 2 }}
+          if ${{ steps.plan.outputs.exitcode == 2 }}; then
             echo "${{ matrix.directory }}" >> /tmp/tf-plan-changed/changed.txt
           else
             echo "No change" >> /tmp/tf-plan-changed/no-changed.txt
