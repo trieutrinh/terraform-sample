@@ -116,7 +116,7 @@ jobs:
           echo "${{ matrix.directory }}" >> /tmp/tf-plan-changed/changed.txt
         working-directory: ${{ matrix.directory }}
       - name: Upload file to artifact
-        if: ${{ !startsWith(github.head_ref, '^dependabot/') && steps.terraform-plan.outputs.exitcode == 2 }}
+        if: ${{ !startsWith(github.head_ref, '^dependabot/') }}
         uses: actions/upload-artifact@v4.6.2
         with:
           name: tf-plan-changed
