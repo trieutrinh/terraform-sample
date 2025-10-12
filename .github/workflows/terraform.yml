@@ -103,6 +103,7 @@ jobs:
           terraform-version: ${{ env.TERRAFORM_VERSION }}
           working-directory: ${{ matrix.directory }}
       - name: Terraform plan
+        id: plan
         uses: trieutrinh/common-gha/.github/actions/terraform-plan@stable
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
@@ -113,7 +114,7 @@ jobs:
         run: |
           mkdir -p /tmp/tf-plan-changed
           echo "Terraform plan on ${{ matrix.directory }} has changes"
-          if ${{ steps.terraform-plan.outputs.exitcode == 2 }}
+          if ${{ steps.plan.outputs.exitcode == 2 }}
             echo "${{ matrix.directory }}" >> /tmp/tf-plan-changed/changed.txt
           else
             echo "No change" >> /tmp/tf-plan-changed/no-changed.txt
