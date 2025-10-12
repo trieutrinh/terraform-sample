@@ -95,20 +95,34 @@ jobs:
           # echo ROLE_TO_ASSUME="${AWS_ROLE_ARN}${{ github.ref != 'refs/heads/master' && '-ro' || '' }}" >> "$GITHUB_ENV"
           echo ROLE_TO_ASSUME="${AWS_ROLE_ARN}" >> "$GITHUB_ENV"
           echo REPO_NAME="${GITHUB_REPOSITORY##*/}" >> "$GITHUB_ENV"
-          echo DIRECTORY="${{ matrix.directory }}" >> "$GITHUB_ENV"
       - name: Setup terraform
         uses: trieutrinh/common-gha/.github/actions/setup-terraform-aws@stable
         with:
           aws-region: ${{ env.AWS_REGION }}
           role-to-assume: ${{ env.ROLE_TO_ASSUME }}
           terraform-version: ${{ env.TERRAFORM_VERSION }}
-          working-directory: ${{ env.DIRECTORY }}
+          working-directory: ${{ matrix.directory }}
       - name: Terraform plan
         uses: trieutrinh/common-gha/.github/actions/terraform-plan@stable
         with:
           github-token: ${{ secrets.GITHUB_TOKEN }}
           github-head-ref: ${{ github.head_ref }}
-          working-directory: ${{ env.DIRECTORY }}
+          working-directory: ${{ matrix.directory }}
+      - name: Create files to store the list of change terraform plan
+        if: ${{ !startsWith(github.head_ref, '^dependabot/.*') && steps.terraform-plan.outputs.exitcode == 2 }}
+        run: |
+          mkdir -p /tmp/tf-plan-changed
+          echo "Terraform plan on ${{ matrix.directory }} has changes"
+          echo "${{ matrix.directory }}" >> /tmp/tf-plan-changed/changed.txt
+        working-directory: ${{ matrix.directory }}
+      - name: Upload file to artifact
+        if: ${{ !startsWith(github.head_ref, '^dependabot/') && steps.terraform-plan.outputs.exitcode == 2 }}
+        uses: actions/upload-artifact@v4.6.2
+        with:
+          name: tf-plan-changed
+          path: /tmp/tf-plan-changed/changed.txt
+          retention-days: 1
+
   terraform-plan-results:
     if: ${{ always() }}
     needs: terraform-plan
@@ -120,6 +134,20 @@ jobs:
               contains(needs.*.result, 'failure') || 
               contains(needs.*.result, 'cancelled')
           }}
+  make-changes-present-list:
+    if: ${{ !startsWith(github.head_ref, '^dependabot/.*') }}
+    needs: terraform-plan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Download artifact
+        uses: actions/download-artifact@v4.6.2
+        with:
+          name: tf-plan-changed
+      - name: Convert changed.txt to JSON
+        id: changed_json
+        run: |
+          echo "json=$(jq -R -s -c 'split(\"\\n\") | map(select(length > 0))' /tmp/tf-plan-changed/changed.txt)" >> $GITHUB_OUTPUT
+
   terraform-apply:
     if: ${{ github.event_name != 'schedule' && github.ref == 'refs/heads/master' }}
     needs: 
