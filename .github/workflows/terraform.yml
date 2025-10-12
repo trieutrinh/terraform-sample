@@ -140,13 +140,14 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Download artifact
-        uses: actions/download-artifact@v4.6.2
+        uses: actions/download-artifact@v5.0.0
         with:
           name: tf-plan-changed
       - name: Convert changed.txt to JSON
         id: changed_json
         run: |
-          echo "json=$(jq -R -s -c 'split(\"\\n\") | map(select(length > 0))' /tmp/tf-plan-changed/changed.txt)" >> $GITHUB_OUTPUT
+          pwd && ls -lha
+          echo "json=$(jq -R -s -c 'split(\"\\n\") | map(select(length > 0))' changed.txt)" >> $GITHUB_OUTPUT
 
   terraform-apply:
     if: ${{ github.event_name != 'schedule' && github.ref == 'refs/heads/master' }}
