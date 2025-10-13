@@ -11,6 +11,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "this" {
   rule {
     id     = "config"
     status = "Enabled"
+    filter {}
     expiration {
       days                         = 1
       expired_object_delete_marker = false
