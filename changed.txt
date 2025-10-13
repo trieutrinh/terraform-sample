@@ -1,0 +1,2 @@
+production
+independent/ap-northeast-1

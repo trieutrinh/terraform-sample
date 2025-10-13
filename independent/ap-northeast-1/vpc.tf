@@ -4,7 +4,7 @@ resource "aws_vpc" "main" {
   enable_dns_support   = true
 
   tags = {
-    Name = "vpc-ap-northeast-1 new"
+    Name = "vpc-apnt-1"
   }
 }
 

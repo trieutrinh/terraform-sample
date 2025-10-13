@@ -6,3 +6,13 @@ resource "aws_s3_bucket" "example" {
     Environment = "Dev"
   }
 }
+resource "aws_s3_bucket_lifecycle_configuration" "this" {
+  bucket = aws_s3_bucket.example.id
+  rule {
+    id     = "config"
+    status = "Enabled"
+    expiration {
+      days = 1
+    }
+  }
+}

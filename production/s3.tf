@@ -4,6 +4,6 @@ resource "aws_s3_bucket" "example" {
   tags = {
     Name        = "trieu-sample-terraform-10072025-production"
     Environment = "Prod"
-    Terraform   = "true"
+    Terraform   = "true-yes"
   }
 }
