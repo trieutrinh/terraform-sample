@@ -37,17 +37,19 @@ module "s3_bucket" {
 
 data "aws_iam_policy_document" "bucket_policy" {
   statement {
+    sid = "PutObjPolicy"
+    effect = "Allow"
     principals {
       type        = "*"
       identifiers = ["*"]
     }
 
     actions = [
-      "s3:ListBucket",
+      "s3:GetObject",
     ]
 
     resources = [
-      "${aws_s3_bucket.example.arn}/*",
+      "arn:aws:s3:::${module.s3_bucket.s3_bucket_id}/*",
     ]
   }
 }
