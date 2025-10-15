@@ -19,44 +19,27 @@ resource "aws_s3_bucket_lifecycle_configuration" "this" {
   }
 }
 module "s3_bucket" {
-  source = "terraform-aws-modules/s3-bucket/aws"
-
-  bucket = "development-trieu-policy"
-  acl    = "private"
+  source        = "terraform-aws-modules/s3-bucket/aws"
+  version       = "5.7.0"
+  create_bucket = true
+  bucket        = "development-trieu-policy-new"
 
   control_object_ownership = true
   object_ownership         = "BucketOwnerPreferred"
-  attach_policy            = true
-  policy                   = data.aws_iam_policy_document.bucket_policy.json
 
-  versioning = {
-    enabled = true
-  }
-}
+  block_public_acls   = false
+  block_public_policy = false
+  ignore_public_acls  = false
+  policy              = data.aws_iam_policy_document.bucket_policy.json
 
-resource "aws_iam_role" "this" {
-  assume_role_policy = <<EOF
-{
-  "Version": "2012-10-17",
-  "Statement": [
-    {
-      "Action": "sts:AssumeRole",
-      "Principal": {
-        "Service": "ec2.amazonaws.com"
-      },
-      "Effect": "Allow",
-      "Sid": ""
-    }
-  ]
-}
-EOF
+  skip_destroy_public_access_block = false
 }
 
 data "aws_iam_policy_document" "bucket_policy" {
   statement {
     principals {
-      type        = "AWS"
-      identifiers = [aws_iam_role.this.arn]
+      type        = "*"
+      identifiers = ["*"]
     }
 
     actions = [
@@ -64,8 +47,7 @@ data "aws_iam_policy_document" "bucket_policy" {
     ]
 
     resources = [
-      "${module.s3_bucket.bucket_arn}",
+      "${aws_s3_bucket.example.arn}/*",
     ]
   }
 }
-
