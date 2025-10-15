@@ -13,8 +13,7 @@ resource "aws_s3_bucket_lifecycle_configuration" "this" {
     status = "Enabled"
     filter {}
     expiration {
-      days                         = 1
-      expired_object_delete_marker = false
+      days = 1
     }
   }
 }
@@ -30,6 +29,7 @@ module "s3_bucket" {
   block_public_acls   = false
   block_public_policy = false
   ignore_public_acls  = false
+  attach_policy       = true
   policy              = data.aws_iam_policy_document.bucket_policy.json
 
   skip_destroy_public_access_block = false
@@ -37,17 +37,19 @@ module "s3_bucket" {
 
 data "aws_iam_policy_document" "bucket_policy" {
   statement {
+    sid    = "PutObjPolicy"
+    effect = "Allow"
     principals {
       type        = "*"
       identifiers = ["*"]
     }
 
     actions = [
-      "s3:ListBucket",
+      "s3:GetObject",
     ]
 
     resources = [
-      "${aws_s3_bucket.example.arn}/*",
+      "arn:aws:s3:::${module.s3_bucket.s3_bucket_id}/*",
     ]
   }
 }
