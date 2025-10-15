@@ -30,6 +30,7 @@ module "s3_bucket" {
   block_public_acls   = false
   block_public_policy = false
   ignore_public_acls  = false
+  attach_policy       = true
   policy              = data.aws_iam_policy_document.bucket_policy.json
 
   skip_destroy_public_access_block = false
@@ -37,7 +38,7 @@ module "s3_bucket" {
 
 data "aws_iam_policy_document" "bucket_policy" {
   statement {
-    sid = "PutObjPolicy"
+    sid    = "PutObjPolicy"
     effect = "Allow"
     principals {
       type        = "*"
