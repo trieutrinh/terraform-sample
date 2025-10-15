@@ -19,15 +19,35 @@ resource "aws_s3_bucket_lifecycle_configuration" "this" {
   }
 }
 module "s3_bucket" {
-  source = "terraform-aws-modules/s3-bucket/aws"
-
-  bucket = "development-trieu-policy"
-  acl    = "private"
+  source        = "terraform-aws-modules/s3-bucket/aws"
+  version       = "5.7.0"
+  create_bucket = true
+  bucket        = "development-trieu-policy-new"
 
   control_object_ownership = true
-  object_ownership         = "ObjectWriter"
+  object_ownership         = "BucketOwnerPreferred"
 
-  versioning = {
-    enabled = true
+  block_public_acls   = false
+  block_public_policy = false
+  ignore_public_acls  = false
+  policy              = data.aws_iam_policy_document.bucket_policy.json
+
+  skip_destroy_public_access_block = false
+}
+
+data "aws_iam_policy_document" "bucket_policy" {
+  statement {
+    principals {
+      type        = "*"
+      identifiers = ["*"]
+    }
+
+    actions = [
+      "s3:ListBucket",
+    ]
+
+    resources = [
+      "${aws_s3_bucket.example.arn}/*",
+    ]
   }
 }
